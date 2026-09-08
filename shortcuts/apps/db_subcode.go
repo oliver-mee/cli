@@ -88,6 +88,25 @@ var dbSubcodeTable = map[string]dbSubcodeMeta{
 		Message:  "audit is not enabled for this table",
 	},
 
+	// +db-data-import hit a cell whose value does not fit the target column's type.
+	// The server already names the row, column, value and expected type in the
+	// message, so the hint only has to point at it.
+	//
+	// InvalidArgument, not FailedPrecondition: nothing about the database state is
+	// wrong — the file the caller supplied is. Exit 2 says "fix the input", which is
+	// exactly the action, and separates it from the generic api/unknown exit 1 that
+	// reads as "something went wrong server-side, maybe retry". Retrying an
+	// unchanged file always fails.
+	//
+	// Covers every column type, not just dates: the server maps both the
+	// invalid-text and invalid-datetime cases here.
+	"k_dl_4000012": {
+		Category: errs.CategoryValidation,
+		Subtype:  errs.SubtypeInvalidArgument,
+		Hint:     "the message names the row, column and expected type. Correct that value in the data file and re-import.",
+		Message:  "a value in the import file does not match its column type",
+	},
+
 	// +db-env-create on an app whose dev/online split already exists. The split is
 	// one-time and irreversible, so this is a no-op, not a retryable failure.
 	"k_dl_4000023": {

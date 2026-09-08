@@ -102,6 +102,8 @@ lark-cli apps +db-data-import --app-id app_xxx --table orders --file ./orders.cs
 
 **导入/导出限额**：体积 ≤ **1 MB**、行数 ≤ **5000**，导入导出都一样，超限会被拒。超限就分批——导入拆成 ≤1 MB / ≤5000 行的多个文件，导出用 `WHERE` / `LIMIT` 缩小范围。
 
+**导入类型不匹配**：某个格子的值与目标列类型不符时报 `validation/invalid_argument`（exit 2），`message` 里直接给出**行号、列名、原值、期望类型**，例如 `Row 1, column 'ship_date': value '按铅改锂送仓时间' is not a valid date`。**照着改数据文件里那一格再重导**——重试同一份文件永远是同样的错，不要当成服务端抖动去重试。注意空单元格会入库为 NULL、不算类型错误。
+
 ### Base 数据同步
 
 Base 数据同步走 `+db-sync-*`，和本地文件导入不同：`+db-data-import` 只处理本地 `.csv/.json` 文件；Base 链接、Base 表、字段映射、持续同步任务都走 `+db-sync-create` / `+db-sync-update`。

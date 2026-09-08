@@ -164,6 +164,23 @@ func TestWithAppsHint_SubcodeTable(t *testing.T) {
 			subtype:  errs.SubtypeAlreadyExists,
 			hintHas:  "one-time",
 		},
+		{
+			// Non-date column, to pin that the entry is type-agnostic.
+			name:     "import type mismatch (integer)",
+			message:  "k_dl_4000012：Row 1, column 'qty': value '不是数字' is not a valid integer",
+			category: errs.CategoryValidation,
+			subtype:  errs.SubtypeInvalidArgument,
+			hintHas:  "re-import",
+		},
+		{
+			// The date variant reaches the same subcode once the server maps the
+			// invalid-datetime SQLSTATE alongside the invalid-text one.
+			name:     "import type mismatch (date)",
+			message:  "k_dl_4000012：Row 1, column 'ship_date': value '按铅改锂送仓时间' is not a valid date",
+			category: errs.CategoryValidation,
+			subtype:  errs.SubtypeInvalidArgument,
+			hintHas:  "re-import",
+		},
 	}
 
 	for _, tc := range cases {
