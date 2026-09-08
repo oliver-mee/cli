@@ -228,9 +228,13 @@ lark-cli apps +db-changelog-list --app-id app_xxx --table orders --since 7d
 
 **`+db-audit-enable` / `+db-audit-disable`**：开 / 关某张表的行级变更审计。`--retention` 设保留期，取值 `7d`/`30d`/`180d`/`360d`/`forever`（默认 `7d`）。不要对已经开启审计的表重复 enable——不确定就先用 `+db-audit-status` 查。
 
+**环境（重要）**：**多环境应用的审计开关只能在 dev 上操作**，对 online 分支开 / 关会被拒（`k_dl_4000004：forbid set audit log operation in online env`）——和 online 禁 DDL 是同一类产品规则，不是 CLI 限制。省略 `--environment` 时多环境应用自动落 dev，所以正常用法不会撞上；只有显式传了 `--environment online` 才会。**单环境应用不受此限**：online 是它唯一的分支，在 online 开审计完全正常。注意 `+db-audit-status` 是读操作，在 online 可以正常查。
+
 ```bash
 lark-cli apps +db-audit-enable --app-id app_xxx --table orders --retention 30d
 lark-cli apps +db-audit-disable --app-id app_xxx --table orders
+# 多环境应用要显式指定环境时，只能给 dev
+lark-cli apps +db-audit-enable --app-id app_xxx --table orders --environment dev
 ```
 
 **`+db-audit-list`**：列出表的行级变更事件（INSERT/UPDATE/DELETE 的前后值与操作人）。`--table` 必填、可重复传多张表；`--since`/`--until` 圈时间。
