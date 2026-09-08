@@ -42,6 +42,15 @@ func TestSubcodeOf(t *testing.T) {
 			ok:       true,
 		},
 		{
+			// Server sent the code with no wording after it. Still a valid subcode;
+			// applyDBSubcode is what decides the message (see the empty-remainder test).
+			name:     "subcode with empty remainder",
+			message:  "k_dl_4000004：",
+			subcode:  "k_dl_4000004",
+			stripped: "",
+			ok:       true,
+		},
+		{
 			name:    "no marker",
 			message: "System error, please contact the administrator",
 			ok:      false,
@@ -172,6 +181,50 @@ func TestWithAppsHint_SubcodeTable(t *testing.T) {
 				t.Fatalf("message = %q, prefix must be stripped", p.Message)
 			}
 		})
+	}
+}
+
+// TestWithAppsHint_EmptyRemainderUsesTableMessage covers the server sending a
+// subcode with nothing after it. Two things must hold at once: the internal prefix
+// must not survive into the user-facing message, and the message must not be blanked
+// — errs.Problem requires it, and an empty one makes Error() return "", which
+// silently swallows the failure in any fmt.Errorf("...: %v", err).
+func TestWithAppsHint_EmptyRemainderUsesTableMessage(t *testing.T) {
+	for _, colon := range []string{"：", ":"} {
+		t.Run("colon="+colon, func(t *testing.T) {
+			in := errs.NewAPIError(errs.SubtypeUnknown, "%s", "k_dl_4000004"+colon).WithCode(400002476)
+			out := withAppsHint(in, dbAuditSetHint)
+
+			p, _ := errs.ProblemOf(out)
+			if p.Message == "" {
+				t.Fatal("message was blanked; errs.Problem requires a non-empty Message")
+			}
+			if strings.Contains(p.Message, dbSubcodePrefix) {
+				t.Fatalf("message = %q, internal prefix must not survive", p.Message)
+			}
+			if p.Message != dbSubcodeTable["k_dl_4000004"].Message {
+				t.Fatalf("message = %q, want the table's fallback wording", p.Message)
+			}
+			// Classification still applies — the missing wording says nothing about
+			// which failure this is.
+			if p.Subtype != errs.SubtypeFailedPrecondition {
+				t.Fatalf("subtype = %s, want failed_precondition", p.Subtype)
+			}
+		})
+	}
+}
+
+// TestDBSubcodeTable_EveryEntryHasFallbackMessage stops a new entry from being added
+// without one: without it, a server message of just `k_dl_<code>：` would leave the
+// raw prefix in front of the user, which is the case this fallback exists to remove.
+func TestDBSubcodeTable_EveryEntryHasFallbackMessage(t *testing.T) {
+	for subcode, meta := range dbSubcodeTable {
+		if strings.TrimSpace(meta.Message) == "" {
+			t.Errorf("%s: Message is empty; add fallback wording for the no-remainder case", subcode)
+		}
+		if strings.Contains(meta.Message, dbSubcodePrefix) {
+			t.Errorf("%s: Message %q must not embed the internal subcode prefix", subcode, meta.Message)
+		}
 	}
 }
 

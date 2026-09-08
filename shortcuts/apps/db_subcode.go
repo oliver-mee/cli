@@ -34,6 +34,16 @@ type dbSubcodeMeta struct {
 	Category errs.Category
 	Subtype  errs.Subtype
 	Hint     string
+
+	// Message is used only when the server sends the subcode with no wording after
+	// it (`k_dl_4000004：` and nothing else) — seen if an i18n lookup resolves to an
+	// empty string. It cannot be skipped by simply assigning the empty remainder:
+	// errs.Problem documents Message as REQUIRED, and an empty one makes Error()
+	// return "", which silently swallows the failure in any fmt.Errorf("...: %v").
+	// Leaving the raw prefix instead would put internal vocabulary in front of
+	// users, so each entry carries its own wording, phrased to match what the
+	// server normally sends for that subcode.
+	Message string
 }
 
 // dbSubcodeTable maps stable dataloom subcodes to a classification and a hint that
@@ -58,6 +68,7 @@ var dbSubcodeTable = map[string]dbSubcodeMeta{
 		Category: errs.CategoryValidation,
 		Subtype:  errs.SubtypeFailedPrecondition,
 		Hint:     "a multi-env app only allows audit settings to be changed on the dev branch. Rerun with `--environment dev`.",
+		Message:  "changing audit settings is not allowed on the online branch",
 	},
 
 	// Enabling audit on a table that already has it on. Idempotency violation:
@@ -66,6 +77,7 @@ var dbSubcodeTable = map[string]dbSubcodeMeta{
 		Category: errs.CategoryAPI,
 		Subtype:  errs.SubtypeAlreadyExists,
 		Hint:     "audit is already enabled for this table and nothing was changed. Inspect the current retention with `lark-cli apps +db-audit-status --app-id <app_id> --table <table>`.",
+		Message:  "audit is already enabled for this table",
 	},
 
 	// Disabling audit on a table that never had it on.
@@ -73,6 +85,7 @@ var dbSubcodeTable = map[string]dbSubcodeMeta{
 		Category: errs.CategoryValidation,
 		Subtype:  errs.SubtypeFailedPrecondition,
 		Hint:     "audit is not enabled for this table, so there is nothing to disable. List the tables that do have it on with `lark-cli apps +db-audit-status --app-id <app_id>`.",
+		Message:  "audit is not enabled for this table",
 	},
 
 	// +db-env-create on an app whose dev/online split already exists. The split is
@@ -81,6 +94,7 @@ var dbSubcodeTable = map[string]dbSubcodeMeta{
 		Category: errs.CategoryAPI,
 		Subtype:  errs.SubtypeAlreadyExists,
 		Hint:     "this app already has dev and online branches; splitting is a one-time operation. Inspect the dev branch with `lark-cli apps +db-table-list --app-id <app_id> --environment dev`.",
+		Message:  "multi-env is already initialized for this app",
 	},
 }
 
@@ -156,8 +170,12 @@ func applyDBSubcode(p *errs.Problem) bool {
 	p.Category = meta.Category
 	p.Subtype = meta.Subtype
 	p.Hint = meta.Hint
-	if stripped != "" {
-		p.Message = stripped
+	// Server wording wins when there is any; otherwise the table's own (see
+	// dbSubcodeMeta.Message). Never assign the empty remainder — Message is
+	// required, and blanking it would make Error() return "".
+	if stripped == "" {
+		stripped = meta.Message
 	}
+	p.Message = stripped
 	return true
 }
